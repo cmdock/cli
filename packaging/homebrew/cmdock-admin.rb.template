@@ -1,0 +1,27 @@
+class CmdockAdmin < Formula
+  desc "Standalone admin CLI for self-hosted cmdock servers"
+  homepage "https://prod-vm-gitea.internal.kellgari.com.au/cmdock/cli"
+  version "@VERSION@"
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.intel?
+      url "@AMD64_URL@"
+      sha256 "@AMD64_SHA256@"
+    end
+
+    if Hardware::CPU.arm?
+      url "@ARM64_URL@"
+      sha256 "@ARM64_SHA256@"
+    end
+  end
+
+  def install
+    bin.install Dir["cmdock-admin*"].find { |path| File.file?(path) && File.basename(path).start_with?("cmdock-admin") }
+    doc.install "README.md", "LICENSE"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/cmdock-admin --version")
+  end
+end

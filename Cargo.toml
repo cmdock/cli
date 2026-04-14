@@ -1,0 +1,39 @@
+[package]
+name = "cmdock-admin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Standalone admin CLI for self-hosted cmdock servers"
+repository = "https://github.com/cmdock/cli"
+homepage = "https://github.com/cmdock/cli"
+readme = "README.md"
+keywords = ["cmdock", "taskwarrior", "admin", "cli"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "cmdock-admin"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+clap = { version = "4.5", features = ["derive", "suggestions", "wrap_help", "env"] }
+dirs = "6.0"
+qr2term = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
+rustls = "0.23"
+rustls-native-certs = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+toml = "0.9"
+url = "2.5"
+uuid = { version = "1.18", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.20"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
