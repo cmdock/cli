@@ -1,6 +1,6 @@
 class CmdockAdmin < Formula
   desc "Standalone admin CLI for self-hosted cmdock servers"
-  homepage "https://prod-vm-gitea.internal.kellgari.com.au/cmdock/cli"
+  homepage "https://github.com/cmdock/cli"
   version "@VERSION@"
   license "MIT"
 

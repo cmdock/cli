@@ -13,7 +13,9 @@ use std::time::Duration as StdDuration;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use config::{FileConfig, ResolvedConfig, resolve_config, save_file_config};
-use connect_config::{BuiltConnectUrl, build_connect_url_with_fallback};
+use connect_config::{
+    BuiltConnectUrl, build_connect_url_with_fallback, build_connect_url_with_fallback_and_scheme,
+};
 use http::{
     AdminApiError, AdminClient, AdminUserSummary, BootstrapRequest, CreateConnectConfigRequest,
     OperatorDeviceResponse, UserStatsResponse,
@@ -74,6 +76,10 @@ struct ConnectArgs {
     taskwarrior: bool,
     #[arg(long)]
     qr: bool,
+    /// URL scheme for QR connect URLs (default: cmdock).
+    /// Use "cmdock-staging" for staging builds that register a separate URL scheme.
+    #[arg(long, default_value = "cmdock", env = "CMDOCK_CONNECT_SCHEME")]
+    scheme: String,
     #[command(subcommand)]
     command: Option<ConnectSubcommand>,
 }
@@ -214,6 +220,7 @@ fn run_setup(args: SetupArgs, cfg: &ResolvedConfig, json: bool) -> Result<()> {
                 &client,
                 &bootstrap.user_id,
                 derived_connect_name(&bootstrap.server_url),
+                "cmdock",
             )?;
             Some(QrConnectJson {
                 user_id: bootstrap.user_id.clone(),
@@ -258,6 +265,7 @@ fn run_setup(args: SetupArgs, cfg: &ResolvedConfig, json: bool) -> Result<()> {
             &client,
             &bootstrap.user_id,
             derived_connect_name(&bootstrap.server_url),
+            "cmdock",
         )?;
         note(format!(
             "  ✓ QR connect token issued ({}, {} bytes)",
@@ -324,6 +332,7 @@ fn run_connect(args: ConnectArgs, cfg: &ResolvedConfig, json: bool, yes: bool) -
                 &client,
                 &user_id,
                 derived_connect_name(client.base_url()),
+                &args.scheme,
             )?;
             if json {
                 return print_json(&QrConnectJson {
@@ -654,6 +663,7 @@ fn create_qr_connect_payload(
     client: &AdminClient,
     user_id: &str,
     preferred_name: Option<String>,
+    scheme: &str,
 ) -> Result<RenderedQrConnect> {
     let issued = client.create_connect_config(
         user_id,
@@ -661,11 +671,12 @@ fn create_qr_connect_payload(
             name: preferred_name.clone(),
         },
     )?;
-    let connect = build_connect_url_with_fallback(
+    let connect = build_connect_url_with_fallback_and_scheme(
         &issued.server_url,
         preferred_name,
         issued.credential,
         Some(issued.token_id.clone()),
+        scheme,
     )?;
     let qr_string =
         generate_qr_string(&connect.url).map_err(|err| anyhow!("failed to render QR: {err}"))?;

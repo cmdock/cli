@@ -3,7 +3,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub const MAX_CONNECT_URL_BYTES: usize = 250;
+pub const MAX_CONNECT_URL_BYTES: usize = 300;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuiltConnectUrl {
@@ -31,6 +31,16 @@ pub fn build_connect_url(
     credential: String,
     token_id: Option<String>,
 ) -> Result<String> {
+    build_connect_url_with_scheme(server_url, name, credential, token_id, "cmdock")
+}
+
+pub fn build_connect_url_with_scheme(
+    server_url: &str,
+    name: Option<String>,
+    credential: String,
+    token_id: Option<String>,
+    scheme: &str,
+) -> Result<String> {
     validate_server_url(server_url)?;
     let payload = ConnectPayload {
         v: 1,
@@ -42,7 +52,7 @@ pub fn build_connect_url(
     };
     let json = serde_json::to_vec(&payload)?;
     let encoded = URL_SAFE_NO_PAD.encode(json);
-    let url = format!("cmdock://connect?payload={encoded}");
+    let url = format!("{scheme}://connect?payload={encoded}");
     if url.len() > MAX_CONNECT_URL_BYTES {
         bail!(
             "connect-config URL is {} bytes, which exceeds the {} byte budget",
@@ -59,13 +69,30 @@ pub fn build_connect_url_with_fallback(
     credential: String,
     token_id: Option<String>,
 ) -> Result<BuiltConnectUrl> {
+    build_connect_url_with_fallback_and_scheme(
+        server_url,
+        preferred_name,
+        credential,
+        token_id,
+        "cmdock",
+    )
+}
+
+pub fn build_connect_url_with_fallback_and_scheme(
+    server_url: &str,
+    preferred_name: Option<String>,
+    credential: String,
+    token_id: Option<String>,
+    scheme: &str,
+) -> Result<BuiltConnectUrl> {
     let normalized_name = preferred_name.and_then(normalize_name);
     if let Some(name) = normalized_name.clone() {
-        match build_connect_url(
+        match build_connect_url_with_scheme(
             server_url,
             Some(name.clone()),
             credential.clone(),
             token_id.clone(),
+            scheme,
         ) {
             Ok(url) => {
                 return Ok(BuiltConnectUrl {
@@ -74,12 +101,12 @@ pub fn build_connect_url_with_fallback(
                     included_name: Some(name),
                 });
             }
-            Err(err) if err.to_string().contains("exceeds the 250 byte budget") => {}
+            Err(err) if err.to_string().contains("exceeds the") => {}
             Err(err) => return Err(err),
         }
     }
 
-    let url = build_connect_url(server_url, None, credential, token_id)?;
+    let url = build_connect_url_with_scheme(server_url, None, credential, token_id, scheme)?;
     Ok(BuiltConnectUrl {
         byte_len: url.len(),
         url,
@@ -160,6 +187,35 @@ mod tests {
             Some("cc_0123456789abcd".into()),
         )
         .unwrap_err();
-        assert!(err.to_string().contains("exceeds the 250 byte budget"));
+        assert!(
+            err.to_string().contains("exceeds the"),
+            "expected byte budget error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn connect_url_with_staging_scheme() {
+        let url = build_connect_url_with_scheme(
+            "https://tasks.example.com",
+            Some("Test".into()),
+            "opaque".into(),
+            Some("cc_1234".into()),
+            "cmdock-staging",
+        )
+        .unwrap();
+        assert!(url.starts_with("cmdock-staging://connect?payload="));
+    }
+
+    #[test]
+    fn connect_url_with_fallback_and_scheme_uses_scheme() {
+        let built = build_connect_url_with_fallback_and_scheme(
+            "https://tasks.example.com",
+            Some("My Server".into()),
+            "opaque".into(),
+            Some("cc_1234".into()),
+            "cmdock-staging",
+        )
+        .unwrap();
+        assert!(built.url.starts_with("cmdock-staging://"));
     }
 }
